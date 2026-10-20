@@ -8,6 +8,27 @@ import { downloadCsv, toCsv } from '../../lib/csv'
 import { supabase } from '../../lib/supabase'
 import type { CycleKind, PillarKey, UserRole } from '../../lib/types'
 
+type ParticipationRow = {
+  school_name: string
+  class_count: number
+  student_count: number
+  participant_count: number
+  participation_pct: number | null
+}
+type SchoolPillarRow = {
+  school_name: string
+  cycle_kind: string
+  pillar_name: string
+  mean_score: number | null
+  student_count: number
+}
+type InterventionRow = {
+  school_name: string
+  month_start: string
+  pillar_name: string
+  class_count: number
+}
+
 type ClassInfo = { id: string; label: string; schoolName: string; grade: number }
 type StudentInfo = { id: string; code: string; classId: string }
 type ScoreInfo = {
@@ -263,7 +284,7 @@ function SecretaryReports() {
         if (result.error) throw new Error('rede')
         downloadCsv(`nexo-participacao-${stamp()}`, toCsv(
           ['Escola', 'Turmas', 'Alunos', 'Com partida', 'Participação (%)'],
-          (result.data ?? []).map((row) => [row.school_name, row.class_count, row.student_count, row.participant_count, row.participation_pct]),
+          ((result.data ?? []) as ParticipationRow[]).map((row) => [row.school_name, row.class_count, row.student_count, row.participant_count, row.participation_pct]),
         ))
       }
       if (kind === 'schools') {
@@ -271,7 +292,7 @@ function SecretaryReports() {
         if (result.error) throw new Error('rede')
         downloadCsv(`nexo-escolas-pilares-${stamp()}`, toCsv(
           ['Escola', 'Período', 'Pilar', 'Média', 'Alunos no grupo'],
-          (result.data ?? []).map((row) => [row.school_name, CYCLE_LABEL[row.cycle_kind as CycleKind] ?? row.cycle_kind, row.pillar_name, row.mean_score, row.student_count]),
+          ((result.data ?? []) as SchoolPillarRow[]).map((row) => [row.school_name, CYCLE_LABEL[row.cycle_kind as CycleKind] ?? row.cycle_kind, row.pillar_name, row.mean_score, row.student_count]),
         ))
       }
       if (kind === 'cycles') {
@@ -287,7 +308,7 @@ function SecretaryReports() {
         if (result.error) throw new Error('rede')
         downloadCsv(`nexo-prioridades-${stamp()}`, toCsv(
           ['Escola', 'Mês', 'Pilar', 'Turmas'],
-          (result.data ?? []).map((row) => [row.school_name, formatDay(row.month_start), row.pillar_name, row.class_count]),
+          ((result.data ?? []) as InterventionRow[]).map((row) => [row.school_name, formatDay(row.month_start), row.pillar_name, row.class_count]),
         ))
       }
     } catch {

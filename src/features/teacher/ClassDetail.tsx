@@ -269,7 +269,7 @@ export function ClassDetail() {
           month_start: monthStart(),
           note: text,
           created_by: profile.id,
-        })
+        }).select('id')
     if (result.error) {
       setFormError('Não foi possível guardar a prioridade deste mês.')
       setSaving(false)

@@ -65,7 +65,7 @@ export function MissionPlay() {
       }
 
       const row = one(
-        data.missions as {
+        data.missions as unknown as {
           title: string
           suggested_level: number
           active: boolean
@@ -190,7 +190,7 @@ export function MissionPlay() {
 
         {saving ? <p className="text-sm font-bold text-brand-800">Guardando sua missão...</p> : null}
 
-        {canPlay && !pending ? (
+        {canPlay && !pending && isActivitySlug(mission.slug) ? (
           <GameEngine slug={mission.slug} difficulty={mission.level} onFinish={(result) => void save(result)} />
         ) : null}
       </div>

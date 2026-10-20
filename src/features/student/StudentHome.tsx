@@ -81,7 +81,7 @@ export function StudentHome() {
 
       const cards: MissionCard[] = []
       for (const row of missionResult.data ?? []) {
-        const mission = one(row.missions as {
+        const mission = one(row.missions as unknown as {
           title: string
           starts_on: string
           ends_on: string
