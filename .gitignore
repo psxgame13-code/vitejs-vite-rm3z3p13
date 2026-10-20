@@ -1,0 +1,29 @@
+# dependencies
+node_modules
+
+# build
+dist
+dist-ssr
+*.local
+
+# env — nunca versionar chaves
+.env
+.env.*
+!.env.example
+
+# netlify
+.netlify
+
+# supabase cli
+supabase/.temp
+supabase/.branches
+
+# logs
+*.log
+npm-debug.log*
+
+# editor e sistema
+.DS_Store
+.idea
+.vscode/*
+!.vscode/extensions.json

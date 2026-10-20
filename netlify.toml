@@ -1,0 +1,23 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# Primeiro a API administrativa. Sem isto, o fallback da SPA engole a função.
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
+
+# Qualquer outra rota volta para o React Router.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
