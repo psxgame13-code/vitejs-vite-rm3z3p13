@@ -1,4 +1,4 @@
-# Mapa dos 68 arquivos
+# Mapa dos 70 arquivos
 
 Cole cada arquivo no caminho abaixo, com o nome exato. Pastas vazias não precisam de arquivo extra: elas nascem quando o arquivo é criado.
 
@@ -71,4 +71,8 @@ Cole cada arquivo no caminho abaixo, com o nome exato. Pastas vazias não precis
 67. `SECURITY.md`
 68. `FILEMAP.md`
 
-Depois de colar, siga o `README.md`: variáveis `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`, migrações de 001 a 011, e a senha de teste `Nexo-teste-2026`. A `SUPABASE_SERVICE_ROLE_KEY` fica só na Netlify.
+69. `supabase/migrations/012_school_rpcs.sql`
+
+70. `supabase/migrations/013_trigger_helper_grants.sql`
+
+Depois de colar, siga o `README.md`: variáveis `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`, migrações de 001 a 013, e a senha de teste `Nexo-teste-2026`. A `SUPABASE_SERVICE_ROLE_KEY` fica só na Netlify.

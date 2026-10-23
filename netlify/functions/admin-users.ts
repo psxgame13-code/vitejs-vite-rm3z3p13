@@ -93,6 +93,15 @@ export const handler: Handler = async (event) => {
 
   if (body.action !== 'create-user') return json(400, 'Ação desconhecida.', false)
 
+  if (
+    typeof body.internalCode !== 'string' ||
+    typeof body.email !== 'string' ||
+    (body.displayName != null && typeof body.displayName !== 'string') ||
+    (body.schoolId != null && typeof body.schoolId !== 'string')
+  ) {
+    return json(400, 'Pedido inválido.', false)
+  }
+
   const internalCode = body.internalCode.trim().toUpperCase()
   const email = body.email.trim().toLowerCase()
   const schoolId = body.schoolId || null
@@ -128,20 +137,31 @@ export const handler: Handler = async (event) => {
     return json(400, taken ? 'Este e-mail já está em uso.' : 'Não foi possível criar o acesso.', false)
   }
 
-  const displayName = body.role === 'student' ? internalCode : body.displayName.trim() || internalCode
-  const profileInsert = await userClient.from('profiles').insert({
-    id: created.data.user.id,
-    role: body.role,
-    school_id: schoolId,
-    municipality_id: actor.municipality_id,
-    internal_code: internalCode,
-    display_name: displayName,
-    active: true,
+  const displayName = body.role === 'student' ? internalCode : (body.displayName ?? '').trim() || internalCode
+  // A tabela profiles não aceita INSERT pela sessão do navegador. O cadastro passa
+  // pela função create_profile_as_admin (só service_role), que confere o admin e
+  // grava o autor na auditoria.
+  const profileInsert = await admin.rpc('create_profile_as_admin', {
+    p_actor: actor.id,
+    p_user_id: created.data.user.id,
+    p_role: body.role,
+    p_school_id: schoolId,
+    p_municipality_id: actor.municipality_id,
+    p_internal_code: internalCode,
+    p_display_name: displayName,
   })
 
   if (profileInsert.error) {
+    // Sem perfil, o acesso recém-criado não pode ficar solto no Auth.
     await admin.auth.admin.deleteUser(created.data.user.id)
-    return json(400, 'O acesso foi cancelado porque o perfil não pôde ser gravado.', false)
+    const duplicated = profileInsert.error.code === '23505'
+    return json(
+      400,
+      duplicated
+        ? 'Este código interno já está em uso.'
+        : 'O acesso foi cancelado porque o perfil não pôde ser gravado.',
+      false,
+    )
   }
 
   return json(200, '', true)

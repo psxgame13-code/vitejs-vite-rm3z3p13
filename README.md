@@ -50,6 +50,10 @@ No SQL Editor, execute um arquivo por vez, nesta ordem, cada um inteiro:
 9. `supabase/migrations/009_aggregate_rpcs.sql`
 10. `supabase/migrations/010_triggers.sql`
 11. `supabase/migrations/011_seed.sql`
+12. `supabase/migrations/012_school_rpcs.sql`
+13. `supabase/migrations/013_trigger_helper_grants.sql`
+
+Rode a 012 e a 013 depois do seed. A 012 cria as funções da tela da direção. A 013 corrige permissões que a 010 tirou demais: sem ela, escola, turma, vínculo e ativar/desativar falham no painel de administração.
 
 O `011_seed.sql` cria o município, as escolas, as turmas, os usuários de teste e as partidas que alimentam os gráficos. Rode esse arquivo uma vez, num projeto vazio. Ele grava em `auth.users` e `auth.identities`.
 
@@ -111,7 +115,7 @@ No SQL Editor, estes resultados confirmam o seed:
 
 O esperado é 8 atividades, 11 alunos e uma linha da rede. `network_overview` rodada como postgres ignora o papel da secretaria; no app, entre com `secretaria@nexo.local` para ver o bloqueio de verdade.
 
-Criar uma pessoa nova só funciona no site publicado na Netlify, com a service_role configurada. No `npm run dev`, escola e turma ainda podem ser criadas pela sessão do admin. A pessoa nova depende da função.
+Criar uma pessoa nova chama `create_profile_as_admin` com a service_role e só funciona no site publicado na Netlify, com a service_role configurada. No `npm run dev`, escola e turma ainda podem ser criadas pela sessão do admin. A pessoa nova depende da função.
 
 ## Papéis e dados
 
