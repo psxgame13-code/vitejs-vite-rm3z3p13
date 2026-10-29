@@ -7,7 +7,8 @@ import { ROLE_LABEL, loginEmail } from '../../lib/constants'
 import { supabase } from '../../lib/supabase'
 import type { AuditLog, UserRole } from '../../lib/types'
 
-type SchoolRow = { id: string; name: string }
+type MunicipalityRow = { id: string; name: string; uf: string }
+type SchoolRow = { id: string; name: string; municipalityId: string }
 type ClassRow = { id: string; schoolId: string; name: string; grade: number; schoolYear: number }
 type PersonRow = {
   id: string
@@ -15,10 +16,12 @@ type PersonRow = {
   name: string
   role: UserRole
   schoolId: string | null
+  municipalityId: string | null
   active: boolean
 }
 
 const ROLES: UserRole[] = ['student', 'teacher', 'principal', 'secretary', 'admin']
+const UF_LIST = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
 
 function formatWhen(value: string): string {
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value))
@@ -42,6 +45,7 @@ async function postAdmin(token: string, body: Record<string, unknown>): Promise<
 
 export function AdminHome() {
   const { profile, session } = useAuth()
+  const [municipalities, setMunicipalities] = useState<MunicipalityRow[]>([])
   const [schools, setSchools] = useState<SchoolRow[]>([])
   const [classes, setClasses] = useState<ClassRow[]>([])
   const [people, setPeople] = useState<PersonRow[]>([])
@@ -49,7 +53,11 @@ export function AdminHome() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
+  const [municipalityName, setMunicipalityName] = useState('')
+  const [municipalityUf, setMunicipalityUf] = useState('RS')
   const [schoolName, setSchoolName] = useState('')
+  const [schoolMunicipalityId, setSchoolMunicipalityId] = useState('')
+  const [personMunicipalityId, setPersonMunicipalityId] = useState('')
   const [classSchoolId, setClassSchoolId] = useState('')
   const [className, setClassName] = useState('')
   const [grade, setGrade] = useState(6)
@@ -68,18 +76,26 @@ export function AdminHome() {
     if (!profile || !supabase) return
     setLoading(true)
     setError(null)
-    const [schoolResult, classResult, peopleResult, auditResult] = await Promise.all([
-      supabase.from('schools').select('id, name').eq('active', true).order('name'),
+    const [municipalityResult, schoolResult, classResult, peopleResult, auditResult] = await Promise.all([
+      supabase.from('municipalities').select('id, name, uf').order('name'),
+      supabase.from('schools').select('id, name, municipality_id').eq('active', true).order('name'),
       supabase.from('classes').select('id, school_id, name, grade, school_year').eq('active', true).order('grade'),
-      supabase.from('profiles').select('id, internal_code, display_name, role, school_id, active').order('internal_code'),
+      supabase.from('profiles').select('id, internal_code, display_name, role, school_id, municipality_id, active').order('internal_code'),
       supabase.from('audit_log').select('id, action, summary, created_at').order('created_at', { ascending: false }).limit(20),
     ])
-    if (schoolResult.error || classResult.error || peopleResult.error) {
+    if (municipalityResult.error || schoolResult.error || classResult.error || peopleResult.error) {
       setError('Não foi possível carregar a administração.')
       setLoading(false)
       return
     }
-    setSchools(schoolResult.data ?? [])
+    setMunicipalities(municipalityResult.data ?? [])
+    setSchools(
+      (schoolResult.data ?? []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        municipalityId: row.municipality_id,
+      })),
+    )
     setClasses(
       (classResult.data ?? []).map((row) => ({
         id: row.id,
@@ -96,6 +112,7 @@ export function AdminHome() {
         name: row.display_name,
         role: row.role as UserRole,
         schoolId: row.school_id,
+        municipalityId: row.municipality_id,
         active: row.active,
       })),
     )
@@ -107,18 +124,39 @@ export function AdminHome() {
     void load()
   }, [load])
 
+  async function createMunicipality(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!supabase) return
+    const name = municipalityName.trim()
+    const uf = municipalityUf.trim().toUpperCase()
+    if (name.length < 3 || !/^[A-Z]{2}$/.test(uf)) {
+      setFormError('Informe o município e a UF com duas letras.')
+      return
+    }
+    setSaving(true)
+    setFormError(null)
+    const { error: insertError } = await supabase.from('municipalities').insert({ name, uf })
+    setSaving(false)
+    if (insertError) {
+      setFormError('Não foi possível criar o município.')
+      return
+    }
+    setMunicipalityName('')
+    await load()
+  }
+
   async function createSchool(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!supabase || !profile?.municipality_id) return
+    if (!supabase) return
     const name = schoolName.trim()
-    if (name.length < 3) {
-      setFormError('Informe o nome da escola.')
+    if (!schoolMunicipalityId || name.length < 3) {
+      setFormError('Escolha o município e informe o nome da escola.')
       return
     }
     setSaving(true)
     setFormError(null)
     const { error: insertError } = await supabase.from('schools').insert({
-      municipality_id: profile.municipality_id,
+      municipality_id: schoolMunicipalityId,
       name,
     })
     setSaving(false)
@@ -171,6 +209,10 @@ export function AdminHome() {
       setFormError('Esta pessoa precisa de uma escola.')
       return
     }
+    if (role === 'secretary' && !personMunicipalityId) {
+      setFormError('A secretaria precisa de um município.')
+      return
+    }
     setSaving(true)
     setFormError(null)
     const message = await postAdmin(session.access_token, {
@@ -180,7 +222,8 @@ export function AdminHome() {
       role,
       internalCode,
       displayName: role === 'student' ? internalCode : displayName.trim() || internalCode,
-      schoolId: personSchoolId || null,
+      schoolId: role === 'secretary' || role === 'admin' ? null : personSchoolId || null,
+      municipalityId: role === 'secretary' ? personMunicipalityId : null,
     })
     setSaving(false)
     if (message) {
@@ -231,8 +274,13 @@ export function AdminHome() {
 
   if (!profile) return null
 
+  const municipalityLabel = (id: string | null) => {
+    const item = municipalities.find((municipality) => municipality.id === id)
+    return item ? `${item.name} (${item.uf})` : '—'
+  }
   const schoolColumns: DataColumn<SchoolRow>[] = [
     { key: 'name', header: 'Escola', render: (row) => row.name },
+    { key: 'municipality', header: 'Município', render: (row) => municipalityLabel(row.municipalityId) },
   ]
   const classColumns: DataColumn<ClassRow>[] = [
     { key: 'grade', header: 'Ano', render: (row) => `${row.grade}º` },
@@ -248,6 +296,7 @@ export function AdminHome() {
     { key: 'code', header: 'Código', render: (row) => row.code },
     { key: 'name', header: 'Exibição', render: (row) => row.name },
     { key: 'role', header: 'Papel', render: (row) => ROLE_LABEL[row.role] },
+    { key: 'municipality', header: 'Município', render: (row) => municipalityLabel(row.municipalityId) },
     { key: 'active', header: 'Situação', render: (row) => (row.active ? 'Ativa' : 'Desativada') },
     {
       key: 'toggle',
@@ -271,7 +320,7 @@ export function AdminHome() {
         <header>
           <h1 className="text-2xl font-extrabold text-brand-900">Administração</h1>
           <p className="mt-1 text-sm leading-6 text-slate-600">
-            Escolas e turmas usam a sua sessão. Criar ou desativar pessoa passa pela função do servidor, nunca pela chave service_role no navegador.
+            A ordem é município, secretaria, escola, direção, professor e aluno. Criar pessoa passa pela função do servidor.
           </p>
         </header>
         <PedagogicalNotice />
@@ -280,16 +329,35 @@ export function AdminHome() {
         {formError ? <p className="rounded-2xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-800">{formError}</p> : null}
 
         <section className="grid gap-3 lg:grid-cols-2">
+          <form className="nexo-card space-y-3" onSubmit={(event) => void createMunicipality(event)}>
+            <h2 className="font-extrabold text-brand-900">Novo município</h2>
+            <p className="text-sm leading-6 text-slate-600">Cada secretaria fica em um município. Crie o município antes da pessoa.</p>
+            <input className="nexo-input" value={municipalityName} onChange={(event) => setMunicipalityName(event.target.value)} placeholder="Nome do município" />
+            <select className="nexo-input" value={municipalityUf} onChange={(event) => setMunicipalityUf(event.target.value)}>
+              {UF_LIST.map((uf) => <option key={uf} value={uf}>{uf}</option>)}
+            </select>
+            <button className="nexo-btn" type="submit" disabled={saving}>Criar município</button>
+          </form>
           <form className="nexo-card space-y-3" onSubmit={(event) => void createSchool(event)}>
             <h2 className="font-extrabold text-brand-900">Nova escola</h2>
+            <select className="nexo-input" value={schoolMunicipalityId} onChange={(event) => setSchoolMunicipalityId(event.target.value)}>
+              <option value="">Município</option>
+              {municipalities.map((item) => <option key={item.id} value={item.id}>{item.name} ({item.uf})</option>)}
+            </select>
             <input className="nexo-input" value={schoolName} onChange={(event) => setSchoolName(event.target.value)} placeholder="Nome da escola" />
             <button className="nexo-btn" type="submit" disabled={saving}>Criar escola</button>
           </form>
+        </section>
+        <DataTable caption="Municípios" columns={[
+          { key: 'name', header: 'Município', render: (row: MunicipalityRow) => row.name },
+          { key: 'uf', header: 'UF', render: (row: MunicipalityRow) => row.uf },
+        ]} rows={municipalities} rowKey={(row) => row.id} empty="Nenhum município cadastrado." />
+        <section className="grid gap-3 lg:grid-cols-2">
           <form className="nexo-card space-y-3" onSubmit={(event) => void createClass(event)}>
             <h2 className="font-extrabold text-brand-900">Nova turma</h2>
             <select className="nexo-input" value={classSchoolId} onChange={(event) => setClassSchoolId(event.target.value)}>
               <option value="">Escola</option>
-              {schools.map((school) => <option key={school.id} value={school.id}>{school.name}</option>)}
+              {schools.map((school) => <option key={school.id} value={school.id}>{school.name} · {municipalityLabel(school.municipalityId)}</option>)}
             </select>
             <input className="nexo-input" value={className} onChange={(event) => setClassName(event.target.value)} placeholder="Nome da turma" />
             <div className="grid grid-cols-2 gap-2">
@@ -313,10 +381,18 @@ export function AdminHome() {
             <select className="nexo-input" value={role} onChange={(event) => setRole(event.target.value as UserRole)}>
               {ROLES.map((item) => <option key={item} value={item}>{ROLE_LABEL[item]}</option>)}
             </select>
-            <select className="nexo-input" value={personSchoolId} onChange={(event) => setPersonSchoolId(event.target.value)}>
-              <option value="">Sem escola</option>
-              {schools.map((school) => <option key={school.id} value={school.id}>{school.name}</option>)}
-            </select>
+            {role === 'secretary' ? (
+              <select className="nexo-input" value={personMunicipalityId} onChange={(event) => setPersonMunicipalityId(event.target.value)}>
+                <option value="">Município da secretaria</option>
+                {municipalities.map((item) => <option key={item.id} value={item.id}>{item.name} ({item.uf})</option>)}
+              </select>
+            ) : null}
+            {role === 'teacher' || role === 'principal' || role === 'student' ? (
+              <select className="nexo-input" value={personSchoolId} onChange={(event) => setPersonSchoolId(event.target.value)}>
+                <option value="">Escola</option>
+                {schools.map((school) => <option key={school.id} value={school.id}>{school.name} · {municipalityLabel(school.municipalityId)}</option>)}
+              </select>
+            ) : null}
           </div>
           <button className="nexo-btn" type="submit" disabled={saving}>Criar pessoa</button>
         </form>

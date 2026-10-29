@@ -11,6 +11,7 @@ type CreateBody = {
   internalCode: string
   displayName: string
   schoolId: string | null
+  municipalityId: string | null
 }
 
 type ActiveBody = {
@@ -71,7 +72,7 @@ export const handler: Handler = async (event) => {
     .eq('id', authUser.data.user.id)
     .maybeSingle()
   const actor = actorResult.data
-  if (actorResult.error || !actor || actor.role !== 'admin' || !actor.active || !actor.municipality_id) {
+  if (actorResult.error || !actor || actor.role !== 'admin' || !actor.active) {
     return json(403, 'Somente a administração ativa pode fazer isso.', false)
   }
 
@@ -97,7 +98,8 @@ export const handler: Handler = async (event) => {
     typeof body.internalCode !== 'string' ||
     typeof body.email !== 'string' ||
     (body.displayName != null && typeof body.displayName !== 'string') ||
-    (body.schoolId != null && typeof body.schoolId !== 'string')
+    (body.schoolId != null && typeof body.schoolId !== 'string') ||
+    (body.municipalityId != null && typeof body.municipalityId !== 'string')
   ) {
     return json(400, 'Pedido inválido.', false)
   }
@@ -105,6 +107,7 @@ export const handler: Handler = async (event) => {
   const internalCode = body.internalCode.trim().toUpperCase()
   const email = body.email.trim().toLowerCase()
   const schoolId = body.schoolId || null
+  const municipalityId = body.municipalityId || null
   if (!isRole(body.role) || passwordTooShort(body.password) || !email.includes('@')) {
     return json(400, 'Papel, e-mail ou senha inválidos.', false)
   }
@@ -119,12 +122,21 @@ export const handler: Handler = async (event) => {
     return json(400, 'Secretaria e administração não ficam presas a uma escola.', false)
   }
   if (schoolId && !UUID.test(schoolId)) return json(400, 'Escola inválida.', false)
+  if (municipalityId && !UUID.test(municipalityId)) return json(400, 'Município inválido.', false)
+  if (body.role === 'secretary' && !municipalityId) {
+    return json(400, 'Escolha o município da secretaria.', false)
+  }
 
+  let profileMunicipality: string | null = null
   if (schoolId) {
     const school = await admin.from('schools').select('id, municipality_id').eq('id', schoolId).maybeSingle()
-    if (school.error || !school.data || school.data.municipality_id !== actor.municipality_id) {
-      return json(400, 'A escola não pertence ao seu município.', false)
-    }
+    if (school.error || !school.data) return json(400, 'Escola não encontrada.', false)
+    profileMunicipality = school.data.municipality_id
+  }
+  if (body.role === 'secretary') {
+    const municipality = await admin.from('municipalities').select('id').eq('id', municipalityId).maybeSingle()
+    if (municipality.error || !municipality.data) return json(400, 'Município não encontrado.', false)
+    profileMunicipality = municipalityId
   }
 
   const created = await admin.auth.admin.createUser({
@@ -138,21 +150,17 @@ export const handler: Handler = async (event) => {
   }
 
   const displayName = body.role === 'student' ? internalCode : (body.displayName ?? '').trim() || internalCode
-  // A tabela profiles não aceita INSERT pela sessão do navegador. O cadastro passa
-  // pela função create_profile_as_admin (só service_role), que confere o admin e
-  // grava o autor na auditoria.
   const profileInsert = await admin.rpc('create_profile_as_admin', {
     p_actor: actor.id,
     p_user_id: created.data.user.id,
     p_role: body.role,
     p_school_id: schoolId,
-    p_municipality_id: actor.municipality_id,
+    p_municipality_id: profileMunicipality,
     p_internal_code: internalCode,
     p_display_name: displayName,
   })
 
   if (profileInsert.error) {
-    // Sem perfil, o acesso recém-criado não pode ficar solto no Auth.
     await admin.auth.admin.deleteUser(created.data.user.id)
     const duplicated = profileInsert.error.code === '23505'
     return json(
