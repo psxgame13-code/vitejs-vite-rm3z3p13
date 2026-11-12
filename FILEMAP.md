@@ -75,4 +75,3 @@ Cole cada arquivo no caminho abaixo, com o nome exato. Pastas vazias não precis
 
 70. `supabase/migrations/013_trigger_helper_grants.sql`
 
-Depois de colar, siga o `README.md`: variáveis `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`, migrações de 001 a 013, e a senha de teste `Nexo-teste-2026`. A `SUPABASE_SERVICE_ROLE_KEY` fica só na Netlify.

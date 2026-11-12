@@ -26,7 +26,7 @@ A função cria o usuário com `email_confirm: true` e grava o perfil com a sess
 
 Desativar uma conta marca `profiles.active` como falso e bloqueia o acesso no Auth. O login também recusa perfil inativo. Ninguém desativa a própria conta por essa função.
 
-A senha `Nexo-teste-2026` é só do piloto. Antes de qualquer uso fora do teste, troque essas senhas ou apague o seed.
+
 
 ## Dados
 

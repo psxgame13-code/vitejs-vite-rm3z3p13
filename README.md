@@ -93,7 +93,7 @@ O `netlify.toml` já publica `dist` e devolve `index.html` para as rotas do Reac
 
 ## 6. Testar
 
-Senha de todas as contas de teste: `Nexo-teste-2026`.
+
 
 | Entrada | Papel | O que conferir |
 | --- | --- | --- |
